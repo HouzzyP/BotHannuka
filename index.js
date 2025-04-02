@@ -57,6 +57,7 @@ client.on('messageCreate', async (message) => {
         message.mentions.users.forEach(user => userIDs.add(user.id));
         await saveUsers();
         message.channel.send('Usuarios agregados correctamente.');
+        return;
     }
 
     if (args[0] === '!ff' && args[1] === 'list') {
@@ -66,9 +67,10 @@ client.on('messageCreate', async (message) => {
             const mentions = [...userIDs].map(id => `<@${id}>`).join(', ');
             message.channel.send(`Usuarios guardados: ${mentions}`);
         }
+        return;
     }
 
-    if (args[0] === '!ff') {
+    if (args[0] === '!ff' && args.length === 1) {
         if (userIDs.size === 0) {
             message.channel.send('No hay usuarios guardados para mencionar.');
         } else {

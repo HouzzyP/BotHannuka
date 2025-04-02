@@ -23,7 +23,7 @@ const commandFiles = {
 const commandImages = {
     ff: 'https://i.imgur.com/UUyr53J.png',
     cs: 'https://media.tenor.com/-X2jc6Ehs2gAAAAM/takinocchi-counter-strike-2-dance.gif',
-    lol: 'https://media2.giphy.com/media/3oKIP73vEZmJjFNXtC/200w.gif'
+    lol: 'https://cdn.discordapp.com/attachments/813142900211712033/1357135988878475444/81186253_10219526229881943_4599003761686347776_n.png?ex=67ef1ae2&is=67edc962&hm=7641bc20d448613c39e23b3acfd5445388327222180f7cac9342147f2327a9b4&'
 };
 
 let usersData = {};

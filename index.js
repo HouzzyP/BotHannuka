@@ -83,16 +83,6 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
-    if (args[1] === 'list') {
-        if (usersData[command].size === 0) {
-            message.channel.send(`No hay usuarios guardados en ${command}.`);
-        } else {
-            const mentions = [...usersData[command]].map(id => `<@${id}>`).join(', ');
-            message.channel.send(`Usuarios guardados en ${command}: ${mentions}`);
-        }
-        return;
-    }
-
     if (args.length === 1) {
         if (usersData[command].size === 0) {
             message.channel.send(`No hay usuarios guardados para mencionar en ${command}.`);

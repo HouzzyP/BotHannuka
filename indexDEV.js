@@ -76,13 +76,6 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
-    if (args[1] === 'remove' && message.mentions.users.size > 0) {
-        message.mentions.users.forEach(user => usersData[command].delete(user.id));
-        await saveUsers(command);
-        message.channel.send(`Usuarios eliminados correctamente de ${command}.`);
-        return;
-    }
-
     if (args[1] === 'list') {
         if (usersData[command].size === 0) {
             message.channel.send(`No hay usuarios guardados en ${command}.`);

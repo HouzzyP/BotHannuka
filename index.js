@@ -1,15 +1,12 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
-const fs = require('fs');
+const { Pool } = require('pg');
 
-const FILE_PATH = 'users.json';
-
-// Cargar usuarios desde el archivo si existe
-let userIDs = new Set();
-if (fs.existsSync(FILE_PATH)) {
-    const data = fs.readFileSync(FILE_PATH, 'utf-8');
-    userIDs = new Set(JSON.parse(data));
-}
+// Configurar la conexión a la base de datos
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false } // Necesario si tu base de datos lo requiere
+});
 
 const client = new Client({
     intents: [
@@ -29,30 +26,48 @@ client.on('messageCreate', async (message) => {
     const args = message.content.split(' ');
 
     if (args[0] === '!ff' && args[1] === 'add' && message.mentions.users.size > 0) {
-        message.mentions.users.forEach(user => {
-            userIDs.add(user.id);
-        });
-
-        // Guardar en el archivo
-        fs.writeFileSync(FILE_PATH, JSON.stringify([...userIDs], null, 2));
+        // Agregar cada usuario a la base de datos
+        for (const user of message.mentions.users.values()) {
+            try {
+                await pool.query(
+                    "INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING",
+                    [user.id]
+                );
+            } catch (error) {
+                console.error('Error al agregar usuario:', error);
+            }
+        }
         message.channel.send('Usuarios agregados correctamente.');
     }
 
     if (args[0] === '!ff' && args[1] === 'list') {
-        if (userIDs.size === 0) {
-            message.channel.send('No hay usuarios guardados.');
-        } else {
-            const mentions = Array.from(userIDs).map(id => `<@${id}>`).join(', ');
-            message.channel.send(`Usuarios guardados: ${mentions}`);
+        try {
+            const res = await pool.query("SELECT id FROM users");
+            if (res.rowCount === 0) {
+                message.channel.send('No hay usuarios guardados.');
+            } else {
+                const mentions = res.rows.map(row => `<@${row.id}>`).join(', ');
+                message.channel.send(`Usuarios guardados: ${mentions}`);
+            }
+        } catch (error) {
+            console.error('Error al listar usuarios:', error);
+            message.channel.send('Ocurrió un error al obtener la lista de usuarios.');
         }
     }
 
     if (args[0] === '!ff' && args.length === 1) {
-        if (userIDs.size === 0) {
-            message.channel.send('No hay usuarios guardados para mencionar.');
-        } else {
-            const mentions = Array.from(userIDs).map(id => `<@${id}>`).join(' ');
-            message.channel.send(`Mencionando: ${mentions}`);
+        try {
+            const res = await pool.query("SELECT id FROM users");
+            if (res.rowCount === 0) {
+                message.channel.send('No hay usuarios guardados para mencionar.');
+            } else {
+                const mentions = res.rows.map(row => `<@${row.id}>`).join(' ');
+                message.channel.send(`https://imgur.com/a/aJ88hAY
+                     ${mentions}`);
+            }
+        } catch (error) {
+            console.error('Error al mencionar usuarios:', error);
+            message.channel.send('Ocurrió un error al mencionar a los usuarios.');
         }
     }
 });

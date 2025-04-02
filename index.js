@@ -14,33 +14,46 @@ const client = new Client({
     ]
 });
 
-let userIDs = new Set();
+const commandFiles = {
+    ff: 'ff_users.json',
+    cs: 'cs_users.json',
+    lol: 'lol_users.json'
+};
 
-// Cargar usuarios desde el Gist
+const commandImages = {
+    ff: 'https://i.imgur.com/UUyr53J.png',
+    cs: 'https://media.tenor.com/-X2jc6Ehs2gAAAAM/takinocchi-counter-strike-2-dance.gif',
+    lol: 'https://media2.giphy.com/media/3oKIP73vEZmJjFNXtC/200w.gif'
+};
+
+let usersData = {};
+
+// Cargar usuarios desde el Gist para todos los comandos
 async function loadUsers() {
     try {
         const response = await axios.get(GIST_URL, {
             headers: { Authorization: `token ${GITHUB_TOKEN}` }
         });
-        const data = JSON.parse(response.data.files['users.json'].content);
-        userIDs = new Set(data);
+        for (const [cmd, file] of Object.entries(commandFiles)) {
+            usersData[cmd] = response.data.files[file] ? new Set(JSON.parse(response.data.files[file].content)) : new Set();
+        }
         console.log("Usuarios cargados desde Gist");
     } catch (error) {
         console.error("Error cargando usuarios:", error);
     }
 }
 
-// Guardar usuarios en el Gist
-async function saveUsers() {
+// Guardar usuarios en el Gist para un comando específico
+async function saveUsers(command) {
     try {
         await axios.patch(GIST_URL, {
-            files: { 'users.json': { content: JSON.stringify([...userIDs], null, 2) } }
+            files: { [commandFiles[command]]: { content: JSON.stringify([...usersData[command]], null, 2) } }
         }, {
             headers: { Authorization: `token ${GITHUB_TOKEN}` }
         });
-        console.log("Usuarios guardados en Gist");
+        console.log(`Usuarios guardados en Gist para ${command}`);
     } catch (error) {
-        console.error("Error guardando usuarios:", error);
+        console.error(`Error guardando usuarios para ${command}:`, error);
     }
 }
 
@@ -52,31 +65,34 @@ client.once('ready', async () => {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     const args = message.content.split(' ');
+    const command = args[0].substring(1);
 
-    if (args[0] === '!ff' && args[1] === 'add' && message.mentions.users.size > 0) {
-        message.mentions.users.forEach(user => userIDs.add(user.id));
-        await saveUsers();
-        message.channel.send('Usuarios agregados correctamente.');
+    if (!Object.keys(commandFiles).includes(command)) return;
+
+    if (args[1] === 'add' && message.mentions.users.size > 0) {
+        message.mentions.users.forEach(user => usersData[command].add(user.id));
+        await saveUsers(command);
+        message.channel.send(`Usuarios agregados correctamente a ${command}.`);
         return;
     }
 
-    if (args[0] === '!ff' && args[1] === 'list') {
-        if (userIDs.size === 0) {
-            message.channel.send('No hay usuarios guardados.');
+    if (args[1] === 'list') {
+        if (usersData[command].size === 0) {
+            message.channel.send(`No hay usuarios guardados en ${command}.`);
         } else {
-            const mentions = [...userIDs].map(id => `<@${id}>`).join(', ');
-            message.channel.send(`Usuarios guardados: ${mentions}`);
+            const mentions = [...usersData[command]].map(id => `<@${id}>`).join(', ');
+            message.channel.send(`Usuarios guardados en ${command}: ${mentions}`);
         }
         return;
     }
 
-    if (args[0] === '!ff' && args.length === 1) {
-        if (userIDs.size === 0) {
-            message.channel.send('No hay usuarios guardados para mencionar.');
+    if (args.length === 1) {
+        if (usersData[command].size === 0) {
+            message.channel.send(`No hay usuarios guardados para mencionar en ${command}.`);
         } else {
-            const mentions = [...userIDs].map(id => `<@${id}>`).join(' ');
-            const imageUrl = 'https://i.imgur.com/UUyr53J.png';
-            message.channel.send({ content: `Mencionando: ${mentions}`, files: [imageUrl] });
+            const mentions = [...usersData[command]].map(id => `<@${id}>`).join(' ');
+            const imageUrl = commandImages[command] || 'https://i.imgur.com/XYRsVRC_d.webp?maxwidth=760&fidelity=grand';
+            message.channel.send({ content: `Mencionando en ${command}: ${mentions}`, files: [imageUrl] });
         }
     }
 });

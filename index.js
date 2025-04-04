@@ -14,27 +14,40 @@ const client = new Client({
     ]
 });
 
-const commandFiles = {
-    ff: 'ff_users.json',
-    cs: 'cs_users.json',
-    lol: 'lol_users.json'
-};
-
-const commandImages = {
-    ff: 'https://i.imgur.com/UUyr53J.png',
-    cs: 'https://i.imgur.com/pZxRnKM.png',
-    lol: 'https://i.imgur.com/hyPzq4U.png'
-};
-
+let commandConfig = {}; // Aquí se almacenarán los comandos dinámicamente
 let usersData = {};
 
-// Cargar usuarios desde el Gist para todos los comandos
+// Cargar configuración de comandos desde el Gist
+async function loadConfig() {
+    try {
+        const response = await axios.get(GIST_URL, {
+            headers: { Authorization: `token ${GITHUB_TOKEN}` }
+        });
+
+        const configFile = response.data.files["commands.json"];
+        if (!configFile) {
+            throw new Error("No se encontró el archivo commands.json en el Gist.");
+        }
+
+        commandConfig = JSON.parse(configFile.content);
+        console.log("Configuración de comandos cargada:", commandConfig);
+
+        for (const cmd of Object.keys(commandConfig)) {
+            usersData[cmd] = new Set();
+        }
+    } catch (error) {
+        console.error("Error cargando configuración de comandos:", error);
+    }
+}
+
+// Cargar usuarios desde el Gist
 async function loadUsers() {
     try {
         const response = await axios.get(GIST_URL, {
             headers: { Authorization: `token ${GITHUB_TOKEN}` }
         });
-        for (const [cmd, file] of Object.entries(commandFiles)) {
+
+        for (const [cmd, { file }] of Object.entries(commandConfig)) {
             usersData[cmd] = response.data.files[file] ? new Set(JSON.parse(response.data.files[file].content)) : new Set();
         }
         console.log("Usuarios cargados desde Gist");
@@ -43,11 +56,13 @@ async function loadUsers() {
     }
 }
 
-// Guardar usuarios en el Gist para un comando específic
+// Guardar usuarios en el Gist
 async function saveUsers(command) {
     try {
         await axios.patch(GIST_URL, {
-            files: { [commandFiles[command]]: { content: JSON.stringify([...usersData[command]], null, 2) } }
+            files: {
+                [commandConfig[command].file]: { content: JSON.stringify([...usersData[command]], null, 2) }
+            }
         }, {
             headers: { Authorization: `token ${GITHUB_TOKEN}` }
         });
@@ -58,6 +73,7 @@ async function saveUsers(command) {
 }
 
 client.once('ready', async () => {
+    await loadConfig();
     await loadUsers();
     console.log(`Bot conectado como ${client.user.tag}`);
 });
@@ -67,7 +83,7 @@ client.on('messageCreate', async (message) => {
     const args = message.content.split(' ');
     const command = args[0].substring(1);
 
-    if (!Object.keys(commandFiles).includes(command)) return;
+    if (!Object.keys(commandConfig).includes(command)) return;
 
     if (args[1] === 'add' && message.mentions.users.size > 0) {
         message.mentions.users.forEach(user => usersData[command].add(user.id));
@@ -83,12 +99,22 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
+    if (args[1] === 'list') {
+        if (usersData[command].size === 0) {
+            message.channel.send(`No hay usuarios guardados en ${command}.`);
+        } else {
+            const mentions = [...usersData[command]].map(id => `<@${id}>`).join(', ');
+            message.channel.send(`Usuarios guardados en ${command}: ${mentions}`);
+        }
+        return;
+    }
+
     if (args.length === 1) {
         if (usersData[command].size === 0) {
             message.channel.send(`No hay usuarios guardados para mencionar en ${command}.`);
         } else {
             const mentions = [...usersData[command]].map(id => `<@${id}>`).join(' ');
-            const imageUrl = commandImages[command] || 'https://i.imgur.com/XYRsVRC_d.webp?maxwidth=760&fidelity=grand';
+            const imageUrl = commandConfig[command].image || 'https://i.imgur.com/default.png';
             message.channel.send({ content: `Mencionando en ${command}: ${mentions}`, files: [imageUrl] });
         }
     }

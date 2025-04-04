@@ -43,7 +43,7 @@ async function loadUsers() {
     }
 }
 
-// Guardar usuarios en el Gist para un comando específico
+// Guardar usuarios en el Gist para un comando específic
 async function saveUsers(command) {
     try {
         await axios.patch(GIST_URL, {

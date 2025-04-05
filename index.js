@@ -5,6 +5,7 @@ const axios = require('axios');
 const GIST_ID = process.env.GIST_ID;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const GIST_URL = `https://api.github.com/gists/${GIST_ID}`;
+const REFRESH_INTERVAL = 30 * 1000; // 30 segundos
 
 const client = new Client({
     intents: [
@@ -14,45 +15,31 @@ const client = new Client({
     ]
 });
 
-let commandConfig = {}; // Aquí se almacenarán los comandos dinámicamente
+let commandConfig = {};
 let usersData = {};
+let lastRefresh = 0; // Guardará el tiempo del último refresco
 
-// Cargar configuración de comandos desde el Gist
-async function loadConfig() {
+// Cargar configuración y usuarios desde el Gist
+async function loadConfigAndUsers() {
     try {
         const response = await axios.get(GIST_URL, {
             headers: { Authorization: `token ${GITHUB_TOKEN}` }
         });
 
+        // Cargar configuración de comandos
         const configFile = response.data.files["commands.json"];
-        if (!configFile) {
-            throw new Error("No se encontró el archivo commands.json en el Gist.");
-        }
-
+        if (!configFile) throw new Error("No se encontró el archivo commands.json en el Gist.");
         commandConfig = JSON.parse(configFile.content);
-        console.log("Configuración de comandos cargada:", commandConfig);
 
-        for (const cmd of Object.keys(commandConfig)) {
-            usersData[cmd] = new Set();
-        }
-    } catch (error) {
-        console.error("Error cargando configuración de comandos:", error);
-    }
-}
-
-// Cargar usuarios desde el Gist
-async function loadUsers() {
-    try {
-        const response = await axios.get(GIST_URL, {
-            headers: { Authorization: `token ${GITHUB_TOKEN}` }
-        });
-
+        // Cargar usuarios para cada comando
         for (const [cmd, { file }] of Object.entries(commandConfig)) {
             usersData[cmd] = response.data.files[file] ? new Set(JSON.parse(response.data.files[file].content)) : new Set();
         }
-        console.log("Usuarios cargados desde Gist");
+
+        lastRefresh = Date.now();
+        console.log("Configuración y usuarios recargados desde Gist.");
     } catch (error) {
-        console.error("Error cargando usuarios:", error);
+        console.error("Error cargando configuración y usuarios:", error);
     }
 }
 
@@ -73,8 +60,7 @@ async function saveUsers(command) {
 }
 
 client.once('ready', async () => {
-    await loadConfig();
-    await loadUsers();
+    await loadConfigAndUsers();
     console.log(`Bot conectado como ${client.user.tag}`);
 });
 
@@ -83,7 +69,13 @@ client.on('messageCreate', async (message) => {
     const args = message.content.split(' ');
     const command = args[0].substring(1);
 
+    // Si el comando no está en la configuración, ignorar
     if (!Object.keys(commandConfig).includes(command)) return;
+
+    // Verificar si es necesario refrescar los datos
+    if (Date.now() - lastRefresh > REFRESH_INTERVAL) {
+        await loadConfigAndUsers();
+    }
 
     if (args[1] === 'add' && message.mentions.users.size > 0) {
         message.mentions.users.forEach(user => usersData[command].add(user.id));

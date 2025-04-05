@@ -1,11 +1,11 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
 const axios = require('axios');
+const { EmbedBuilder } = require('discord.js');
 
 const GIST_ID = process.env.GIST_ID;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const GIST_URL = `https://api.github.com/gists/${GIST_ID}`;
-const REFRESH_INTERVAL = 30 * 1000; // 30 segundos
 
 const client = new Client({
     intents: [
@@ -15,31 +15,40 @@ const client = new Client({
     ]
 });
 
-let commandConfig = {};
+let commandFiles = {};
+let commandImages = {};
 let usersData = {};
-let lastRefresh = 0; // Guardará el tiempo del último refresco
+let commandStats = {}; // Estadísticas
 
-// Cargar configuración y usuarios desde el Gist
-async function loadConfigAndUsers() {
+// Cargar configuración dinámica desde el Gist
+async function loadConfig() {
     try {
         const response = await axios.get(GIST_URL, {
             headers: { Authorization: `token ${GITHUB_TOKEN}` }
         });
+        const files = response.data.files;
 
-        // Cargar configuración de comandos
-        const configFile = response.data.files["commands.json"];
-        if (!configFile) throw new Error("No se encontró el archivo commands.json en el Gist.");
-        commandConfig = JSON.parse(configFile.content);
+        // Resetear
+        commandFiles = {};
+        usersData = {};
+        commandImages = {};
+        commandStats = files['command_stats.json'] ? JSON.parse(files['command_stats.json'].content) : {};
 
-        // Cargar usuarios para cada comando
-        for (const [cmd, { file }] of Object.entries(commandConfig)) {
-            usersData[cmd] = response.data.files[file] ? new Set(JSON.parse(response.data.files[file].content)) : new Set();
+        for (const fileName in files) {
+            if (fileName.endsWith('_users.json')) {
+                const cmd = fileName.replace('_users.json', '');
+                commandFiles[cmd] = fileName;
+                usersData[cmd] = new Set(JSON.parse(files[fileName].content));
+            }
+            if (fileName.endsWith('_image.txt')) {
+                const cmd = fileName.replace('_image.txt', '');
+                commandImages[cmd] = files[fileName].content.trim();
+            }
         }
 
-        lastRefresh = Date.now();
-        console.log("Configuración y usuarios recargados desde Gist.");
+        console.log("Configuración cargada desde Gist");
     } catch (error) {
-        console.error("Error cargando configuración y usuarios:", error);
+        console.error("Error cargando configuración:", error);
     }
 }
 
@@ -48,46 +57,100 @@ async function saveUsers(command) {
     try {
         await axios.patch(GIST_URL, {
             files: {
-                [commandConfig[command].file]: { content: JSON.stringify([...usersData[command]], null, 2) }
+                [commandFiles[command]]: {
+                    content: JSON.stringify([...usersData[command]], null, 2)
+                }
             }
         }, {
             headers: { Authorization: `token ${GITHUB_TOKEN}` }
         });
-        console.log(`Usuarios guardados en Gist para ${command}`);
+        console.log(`Usuarios guardados para ${command}`);
     } catch (error) {
-        console.error(`Error guardando usuarios para ${command}:`, error);
+        console.error(`Error guardando usuarios de ${command}:`, error);
     }
 }
 
+// Guardar estadísticas en el Gist
+async function saveStats() {
+    try {
+        await axios.patch(GIST_URL, {
+            files: {
+                'command_stats.json': {
+                    content: JSON.stringify(commandStats, null, 2)
+                }
+            }
+        }, {
+            headers: { Authorization: `token ${GITHUB_TOKEN}` }
+        });
+        console.log("Estadísticas guardadas");
+    } catch (error) {
+        console.error("Error guardando estadísticas:", error);
+    }
+}
+
+// Incrementar estadísticas
+function incrementStats(command, userId) {
+    if (!commandStats[command]) {
+        commandStats[command] = { count: 0, users: {} };
+    }
+    commandStats[command].count++;
+    if (!commandStats[command].users[userId]) {
+        commandStats[command].users[userId] = 0;
+    }
+    commandStats[command].users[userId]++;
+}
+
 client.once('ready', async () => {
-    await loadConfigAndUsers();
+    await loadConfig();
     console.log(`Bot conectado como ${client.user.tag}`);
 });
 
 client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
-    const args = message.content.split(' ');
-    const command = args[0].substring(1);
+    if (message.author.bot || !message.content.startsWith('!')) return;
 
-    // Verificar si es necesario refrescar los datos ANTES de chequear si el comando existe
-    if (Date.now() - lastRefresh > REFRESH_INTERVAL) {
-        await loadConfigAndUsers();
+    const args = message.content.slice(1).split(' ');
+    const command = args[0];
+
+    if (command === 'stats') {
+        const embed = new EmbedBuilder()
+            .setTitle('📊 Estadísticas de comandos')
+            .setColor('#0099ff')
+            .setTimestamp();
+
+        if (Object.keys(commandStats).length === 0) {
+            embed.setDescription('No hay estadísticas registradas.');
+        } else {
+            for (const [cmd, data] of Object.entries(commandStats)) {
+                const topUser = Object.entries(data.users).sort((a, b) => b[1] - a[1])[0];
+                embed.addFields({
+                    name: `/${cmd}`,
+                    value: `• Usos: **${data.count}**
+    ${topUser ? `• Más activo: <@${topUser[0]}> (${topUser[1]})` : ''}`,
+                    inline: false
+                });
+            }
+        }
+
+        message.channel.send({ embeds: [embed] });
+        return;
     }
 
-    // Volvemos a verificar si el comando existe (por si fue agregado recientemente)
-    if (!Object.keys(commandConfig).includes(command)) return;
+    if (!Object.keys(commandFiles).includes(command)) return;
+
+    incrementStats(command, message.author.id);
+    await saveStats();
 
     if (args[1] === 'add' && message.mentions.users.size > 0) {
         message.mentions.users.forEach(user => usersData[command].add(user.id));
         await saveUsers(command);
-        message.channel.send(`Usuarios agregados correctamente a ${command}.`);
+        message.channel.send(`Usuarios agregados a ${command}.`);
         return;
     }
 
     if (args[1] === 'remove' && message.mentions.users.size > 0) {
         message.mentions.users.forEach(user => usersData[command].delete(user.id));
         await saveUsers(command);
-        message.channel.send(`Usuarios eliminados correctamente de ${command}.`);
+        message.channel.send(`Usuarios eliminados de ${command}.`);
         return;
     }
 
@@ -103,10 +166,10 @@ client.on('messageCreate', async (message) => {
 
     if (args.length === 1) {
         if (usersData[command].size === 0) {
-            message.channel.send(`No hay usuarios guardados para mencionar en ${command}.`);
+            message.channel.send(`No hay usuarios guardados en ${command}.`);
         } else {
             const mentions = [...usersData[command]].map(id => `<@${id}>`).join(' ');
-            const imageUrl = commandConfig[command].image || 'https://i.imgur.com/default.png';
+            const imageUrl = commandImages[command] || 'https://i.imgur.com/UUyr53J.png';
             message.channel.send({ content: `Mencionando en ${command}: ${mentions}`, files: [imageUrl] });
         }
     }

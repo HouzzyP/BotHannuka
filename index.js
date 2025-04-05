@@ -69,13 +69,13 @@ client.on('messageCreate', async (message) => {
     const args = message.content.split(' ');
     const command = args[0].substring(1);
 
-    // Si el comando no está en la configuración, ignorar
-    if (!Object.keys(commandConfig).includes(command)) return;
-
-    // Verificar si es necesario refrescar los datos
+    // Verificar si es necesario refrescar los datos ANTES de chequear si el comando existe
     if (Date.now() - lastRefresh > REFRESH_INTERVAL) {
         await loadConfigAndUsers();
     }
+
+    // Volvemos a verificar si el comando existe (por si fue agregado recientemente)
+    if (!Object.keys(commandConfig).includes(command)) return;
 
     if (args[1] === 'add' && message.mentions.users.size > 0) {
         message.mentions.users.forEach(user => usersData[command].add(user.id));

@@ -1,7 +1,6 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
-const { EmbedBuilder } = require('discord.js');
 
 const GIST_ID = process.env.GIST_ID;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
@@ -28,7 +27,6 @@ async function loadConfig() {
         });
         const files = response.data.files;
 
-        // Resetear
         commandFiles = {};
         usersData = {};
         commandImages = {};
@@ -112,24 +110,15 @@ client.on('messageCreate', async (message) => {
     const command = args[0];
 
     if (command === 'stats') {
+        const statsMsg = Object.entries(commandStats).map(([cmd, data]) => {
+            const topUser = Object.entries(data.users).sort((a, b) => b[1] - a[1])[0];
+            return `**${cmd}**: ${data.count} usos${topUser ? ` | Más activo: <@${topUser[0]}> (${topUser[1]})` : ''}`;
+        }).join('\n') || 'No hay estadísticas registradas.';
+
         const embed = new EmbedBuilder()
             .setTitle('📊 Estadísticas de comandos')
-            .setColor('#0099ff')
-            .setTimestamp();
-
-        if (Object.keys(commandStats).length === 0) {
-            embed.setDescription('No hay estadísticas registradas.');
-        } else {
-            for (const [cmd, data] of Object.entries(commandStats)) {
-                const topUser = Object.entries(data.users).sort((a, b) => b[1] - a[1])[0];
-                embed.addFields({
-                    name: `/${cmd}`,
-                    value: `• Usos: **${data.count}**
-    ${topUser ? `• Más activo: <@${topUser[0]}> (${topUser[1]})` : ''}`,
-                    inline: false
-                });
-            }
-        }
+            .setDescription(statsMsg)
+            .setColor(0x00AEFF);
 
         message.channel.send({ embeds: [embed] });
         return;
@@ -170,7 +159,14 @@ client.on('messageCreate', async (message) => {
         } else {
             const mentions = [...usersData[command]].map(id => `<@${id}>`).join(' ');
             const imageUrl = commandImages[command] || 'https://i.imgur.com/UUyr53J.png';
-            message.channel.send({ content: `Mencionando en ${command}: ${mentions}`, files: [imageUrl] });
+
+            const embed = new EmbedBuilder()
+                .setTitle(`📢 Mención de ${command}`)
+                .setDescription(mentions)
+                .setImage(imageUrl)
+                .setColor(0x00BFFF);
+
+            message.channel.send({ embeds: [embed] });
         }
     }
 });

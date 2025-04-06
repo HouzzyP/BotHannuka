@@ -18,6 +18,7 @@ let commandFiles = {};
 let commandImages = {};
 let usersData = {};
 let commandStats = {}; // Estadísticas
+let commandDescriptions = {}; // Descripciones
 
 // Cargar configuración dinámica desde el Gist
 async function loadConfig() {
@@ -30,6 +31,7 @@ async function loadConfig() {
         commandFiles = {};
         usersData = {};
         commandImages = {};
+        commandDescriptions = {};
         commandStats = files['command_stats.json'] ? JSON.parse(files['command_stats.json'].content) : {};
 
         if (files['commands.json']) {
@@ -39,6 +41,7 @@ async function loadConfig() {
                 const cmdData = commandsJson[cmd];
                 commandFiles[cmd] = cmdData.file;
                 commandImages[cmd] = cmdData.image;
+                commandDescriptions[cmd] = cmdData.description || 'Sin descripción disponible';
 
                 if (files[cmdData.file]) {
                     usersData[cmd] = new Set(JSON.parse(files[cmdData.file].content));
@@ -116,7 +119,7 @@ client.on('messageCreate', async (message) => {
     await loadConfig(); // 🔁 Recarga la configuración del Gist en cada mensaje
 
     if (command === 'help') {
-        const helpText = Object.keys(commandFiles).map(cmd => `**!${cmd}**`).join('\n');
+        const helpText = Object.keys(commandFiles).map(cmd => `**!${cmd}**: ${commandDescriptions[cmd] || 'Sin descripción.'}`).join('\n');
         const embed = new EmbedBuilder()
             .setTitle('🆘 Lista de Comandos Disponibles')
             .setDescription(helpText || 'No hay comandos disponibles.')
@@ -137,6 +140,29 @@ client.on('messageCreate', async (message) => {
             .setColor(0x00AEFF);
 
         message.channel.send({ embeds: [embed] });
+        return;
+    }
+
+    if (command === 'poll') {
+        const opciones = message.content.split('|').map(s => s.trim()).slice(1);
+        if (opciones.length < 2) {
+            return message.channel.send('Debes proporcionar al menos 2 opciones. Ej: `!poll Opción A | Opción B`');
+        }
+
+        const emojis = ['🇦', '🇧', '🇨', '🇩', '🇪', '🇫', '🇬'];
+        if (opciones.length > emojis.length) {
+            return message.channel.send('Máximo 7 opciones permitidas.');
+        }
+
+        const embed = new EmbedBuilder()
+            .setTitle('🗳️ Elijan gordos')
+            .setDescription(opciones.map((op, i) => `${emojis[i]} ${op}`).join('\n'))
+            .setColor(0x3498db);
+
+        const pollMessage = await message.channel.send({ embeds: [embed] });
+        for (let i = 0; i < opciones.length; i++) {
+            await pollMessage.react(emojis[i]);
+        }
         return;
     }
 

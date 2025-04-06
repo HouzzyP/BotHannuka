@@ -32,15 +32,19 @@ async function loadConfig() {
         commandImages = {};
         commandStats = files['command_stats.json'] ? JSON.parse(files['command_stats.json'].content) : {};
 
-        for (const fileName in files) {
-            if (fileName.endsWith('_users.json')) {
-                const cmd = fileName.replace('_users.json', '');
-                commandFiles[cmd] = fileName;
-                usersData[cmd] = new Set(JSON.parse(files[fileName].content));
-            }
-            if (fileName.endsWith('_image.txt')) {
-                const cmd = fileName.replace('_image.txt', '');
-                commandImages[cmd] = files[fileName].content.trim();
+        if (files['commands.json']) {
+            const commandsJson = JSON.parse(files['commands.json'].content);
+
+            for (const cmd in commandsJson) {
+                const cmdData = commandsJson[cmd];
+                commandFiles[cmd] = cmdData.file;
+                commandImages[cmd] = cmdData.image;
+
+                if (files[cmdData.file]) {
+                    usersData[cmd] = new Set(JSON.parse(files[cmdData.file].content));
+                } else {
+                    usersData[cmd] = new Set();
+                }
             }
         }
 
@@ -109,6 +113,18 @@ client.on('messageCreate', async (message) => {
     const args = message.content.slice(1).split(' ');
     const command = args[0];
 
+    await loadConfig(); // 🔁 Recarga la configuración del Gist en cada mensaje
+
+    if (command === 'help') {
+        const helpText = Object.keys(commandFiles).map(cmd => `**!${cmd}**`).join('\n');
+        const embed = new EmbedBuilder()
+            .setTitle('🆘 Lista de Comandos Disponibles')
+            .setDescription(helpText || 'No hay comandos disponibles.')
+            .setColor(0x00AEFF);
+        message.channel.send({ embeds: [embed] });
+        return;
+    }
+
     if (command === 'stats') {
         const statsMsg = Object.entries(commandStats).map(([cmd, data]) => {
             const topUser = Object.entries(data.users).sort((a, b) => b[1] - a[1])[0];
@@ -121,22 +137,6 @@ client.on('messageCreate', async (message) => {
             .setColor(0x00AEFF);
 
         message.channel.send({ embeds: [embed] });
-        return;
-    }
-
-    if (command === 'help') {
-        const helpEmbed = new EmbedBuilder()
-            .setTitle('🛠️ Comandos disponibles')
-            .setColor(0x5865F2)
-            .setDescription('Aquí tienes una lista de comandos disponibles:\n\n' +
-                Object.keys(commandFiles).map(cmd =>
-                    `• **!${cmd}** — Menciona usuarios del grupo *${cmd}*\n   ➕ \`!${cmd} add @user\` — Agrega usuarios\n   ➖ \`!${cmd} remove @user\` — Quita usuarios\n   📋 \`!${cmd} list\` — Lista los usuarios`
-                ).join('\n\n') +
-                '\n\n📊 **!stats** — Muestra estadísticas de uso'
-            )
-            .setFooter({ text: 'Usa !comando para mencionar a los usuarios guardados.' });
-
-        message.channel.send({ embeds: [helpEmbed] });
         return;
     }
 

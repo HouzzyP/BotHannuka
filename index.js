@@ -124,6 +124,22 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
+    if (command === 'help') {
+        const helpEmbed = new EmbedBuilder()
+            .setTitle('🛠️ Comandos disponibles')
+            .setColor(0x5865F2)
+            .setDescription('Aquí tienes una lista de comandos disponibles:\n\n' +
+                Object.keys(commandFiles).map(cmd =>
+                    `• **!${cmd}** — Menciona usuarios del grupo *${cmd}*\n   ➕ \`!${cmd} add @user\` — Agrega usuarios\n   ➖ \`!${cmd} remove @user\` — Quita usuarios\n   📋 \`!${cmd} list\` — Lista los usuarios`
+                ).join('\n\n') +
+                '\n\n📊 **!stats** — Muestra estadísticas de uso'
+            )
+            .setFooter({ text: 'Usa !comando para mencionar a los usuarios guardados.' });
+
+        message.channel.send({ embeds: [helpEmbed] });
+        return;
+    }
+
     if (!Object.keys(commandFiles).includes(command)) return;
 
     incrementStats(command, message.author.id);
@@ -162,11 +178,13 @@ client.on('messageCreate', async (message) => {
 
             const embed = new EmbedBuilder()
                 .setTitle(`📢 Mención de ${command}`)
-                .setDescription(mentions)
                 .setImage(imageUrl)
                 .setColor(0x00BFFF);
 
-            message.channel.send({ embeds: [embed] });
+            message.channel.send({
+                content: mentions,
+                embeds: [embed]
+            });
         }
     }
 });

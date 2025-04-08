@@ -144,18 +144,20 @@ client.on('messageCreate', async (message) => {
     }
 
     if (command === 'poll') {
-        const opciones = message.content.split('|').map(s => s.trim()).slice(1);
+        const pollContent = message.content.slice(command.length + 2).trim(); // remueve "!poll " (con espacio)
+        const opciones = pollContent.split('|').map(s => s.trim());
+
         if (opciones.length < 2) {
             return message.channel.send('Debes proporcionar al menos 2 opciones. Ej: `!poll Opción A | Opción B`');
         }
 
-        const emojis = ['🇦', '🇧', '🇨', '🇩', '🇪', '🇫', '🇬'];
+        const emojis = ['🇦', '🇧', '🇨', '🇩', '🇪', '🇫', '🇬', '🇭', '🇮', '🇯'];
         if (opciones.length > emojis.length) {
-            return message.channel.send('Máximo 7 opciones permitidas.');
+            return message.channel.send('Máximo 10 opciones permitidas.');
         }
 
         const embed = new EmbedBuilder()
-            .setTitle('🗳️ Elijan gordos')
+            .setTitle('🗳️ Nueva votación')
             .setDescription(opciones.map((op, i) => `${emojis[i]} ${op}`).join('\n'))
             .setColor(0x3498db);
 
@@ -163,6 +165,7 @@ client.on('messageCreate', async (message) => {
         for (let i = 0; i < opciones.length; i++) {
             await pollMessage.react(emojis[i]);
         }
+
         return;
     }
 

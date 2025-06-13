@@ -20,6 +20,8 @@ let usersData = {};
 let commandStats = {}; // Estadísticas
 let commandDescriptions = {}; // Descripciones
 
+console.log("Bot iniciado", GIST_ID, GITHUB_TOKEN, GIST_URL);
+
 // Cargar configuración dinámica desde el Gist
 async function loadConfig() {
     try {

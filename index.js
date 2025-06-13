@@ -6,6 +6,23 @@ const GIST_ID = process.env.GIST_ID;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const GIST_URL = `https://api.github.com/gists/${GIST_ID}`;
 
+const express = require('express');
+const app = express();
+
+// Endpoint básico para que Render detecte que está “vivo”
+app.get('/', (req, res) => {
+  res.send('Bot is running!');
+});
+
+// Usá el puerto que Render provee en la variable de entorno PORT, o 3000 si no está.
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Web server running on port ${PORT}`);
+});
+
+
+
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
